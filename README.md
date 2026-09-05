@@ -25,4 +25,4 @@ Dokumentacja wdrożenia bezpiecznego, izolowanego bota Discord w kontenerze Debi
 - [x] Konfiguracja sieci, NAT i bezpiecznego routingu na Proxmoxie.
 - [x] Stworzenie izolowanego kontenera LXC z Pythonem i Gitem.
 - [x] Przygotowanie struktury bota i instalacja `discord.py`.
-- [ ] **Jutro**: Konfiguracja uprawnień bota na Discordzie (Discord Developer Portal / Intents), wklejenie tokena i pierwsze uruchomienie testowe na żywo.
+- [ ] Konfiguracja uprawnień bota na Discordzie (Discord Developer Portal / Intents), wklejenie tokena i pierwsze uruchomienie testowe na żywo.
