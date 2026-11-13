@@ -1,14 +1,14 @@
-# 🤖 Event & Voice Attendance Tracking Discord Bot & Guild Management System
+# 🤖 Event & Voice Attendance Tracking Discord Bot
 
-An enterprise-grade, self-hosted Discord Automation Service and Web Dashboard engineered for real-time channel attendance tracking, voice engagement analytics, automated event archiving, guild roster management, and hardened Zero-Trust system operations.
+A 100% free, self-hosted Discord Automation Service engineered for real-time voice channel attendance tracking, voice engagement analytics, automated event archiving, guild roster management, and hardened Zero-Trust system operations.
 
-Built with **Python 3.11** (`discord.py` + `FastAPI`) and deployed inside a strictly isolated **Debian Linux Virtual Machine** managed by **Proxmox VE**, utilizing a **hybrid Cloudflare WARP + Cloudflare Tunnel (`cloudflared`) architecture** for encrypted outbound connectivity, secure inbound web exposure, and full local network isolation.
+Built with **Python 3.11** (`discord.py`) and deployed inside a strictly isolated **Debian Linux Virtual Machine** managed by **Proxmox VE**, utilizing a **Cloudflare WARP** architecture for encrypted outbound connectivity and full local network isolation. All insights, stats, and rankings are handled natively inside Discord via modern Slash Commands and Rich Embeds.
 
 ---
 
 ## 📐 Infrastructure & Zero-Trust Network Architecture
 
-To guarantee complete protection of the host's local home network (LAN/Wi-Fi) without relying on dedicated external hardware firewalls or router port forwarding, the infrastructure utilizes a dual-layer software firewall combined with split Cloudflare tunneling:
+To guarantee complete protection of the host's local home network (LAN/Wi-Fi) without relying on dedicated external hardware firewalls or router port forwarding, the infrastructure utilizes software firewalls combined with secure Cloudflare WARP routing:
 
 ```
  ┌───────────────────────────────────────────────────────────────────────────┐
@@ -22,26 +22,24 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
  │  │  ┌──────────────────────┐       ┌────────────────────────────────┐  │  │
  │  │  │ Discord Bot Service  │ ────► │ Cloudflare WARP Client Tunnel  │  │  │
  │  │  │ (Async discord.py)   │       │ (Encrypted Outbound WireGuard) │  │  │
- │  │  └──────────┬───────────┘       └───────────────┬────────────────┘  │  │
- │  │             │                                   │                   │  │
- │  │             ▼ (Shared SQLite WAL DB)            │                   │  │
- │  │  ┌──────────────────────┐       ┌───────────────┼────────────────┐  │  │
- │  │  │ Web Roster Dashboard │ ◄──── │ Cloudflare Tunnel (cloudflared)│  │  │
- │  │  │ (FastAPI / Uvicorn)  │       │ (Zero-Trust Inbound Reverse Proxy)│ │
- │  │  └──────────────────────┘       └───────────────┬────────────────┘  │  │
- │  └─────────────────────────────────────────────────┼───────────────────┘  │
- └────────────────────────────────────────────────────┼──────────────────────┘
-                                                      │ SSL/TLS (Port 443)
+ │  │  └──────────┬───────────┘       └────────────────────────────────┘  │  │
+ │  │             │                                                       │  │
+ │  │             ▼ (Local JSON Persistence)                              │  │
+ │  │  ┌──────────────────────┐                                           │  │
+ │  │  │ events_history.json  │                                           │  │
+ │  │  └──────────────────────┘                                           │  │
+ │  └─────────────────────────────────────────────────────────────────────┘  │
+ └───────────────────────────────────────────────────────────────────────────┘
+                                                      │ Encrypted Gateway
                                                       ▼
                                         ┌───────────────────────────┐
-                                        │ Discord API & Public Web  │
-                                        │ (Zero Open Router Ports)  │
+                                        │        Discord API        │
+                                        │  (Zero Open Router Ports) │
                                         └───────────────────────────┘
 ```
 
-### Hybrid Tunneling & Isolation Model
-* **Outbound Bot Traffic (`Cloudflare WARP`):** All outgoing gateway traffic from the `discord.py` daemon is routed through an encrypted WireGuard tunnel (`CloudflareWARP`), masking the home IP and ensuring resilient connectivity.
-* **Inbound Web Dashboard (`Cloudflare Tunnel / cloudflared`):** The upcoming FastAPI web portal is exposed securely over HTTPS via an outbound-only `cloudflared` daemon. Zero inbound ports (no DNAT/Port Forwarding) are opened on the home router.
+### Isolation Model
+* **Outbound Traffic (`Cloudflare WARP`):** All outgoing gateway traffic from the `discord.py` daemon is routed through an encrypted WireGuard tunnel (`CloudflareWARP`), masking the home IP and ensuring resilient connectivity.
 * **Hypervisor-Level LAN Isolation (`Proxmox Firewall`):** Egress traffic from the VM interface is explicitly filtered at the hypervisor bridge level (`vmbr0`). Outbound packets targeting the local private subnet (`192.168.0.0/24`) are dropped (`DROP`), permitting only default gateway routing (`192.168.0.1`) for WAN/DNS resolution.
 * **Guest OS Hardening (`UFW`):** Default `DENY` policy on all incoming interfaces, with a strict IP-restricted allowlist permitting SSH administration (`22/tcp`) exclusively from the primary workstation.
 
@@ -52,58 +50,24 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
 ### 1. **Real-Time Voice State Tracking & Attendance Analytics**
 * **Event-Driven Listener (`on_voice_state_update`):** Dynamically tracks user connection events, disconnects, and channel shifts in real-time between `/activity_start` and `/activity_end`.
 * **Duration & Percentage Computation:** Calculates exact time spent by each participant on voice channels relative to total event duration, yielding precise attendance percentages (0–100%).
-* **Historical Persistence & Auto-Rotation:** Saves structured event metrics (`name`, `key`, `duration_minutes`, `attendance`) to persistent storage, maintaining rolling caps to prevent unbounded storage growth on low-power hardware.
+* **Historical Persistence & Auto-Rotation:** Saves structured event metrics to local persistent storage (`events_history.json`), maintaining a rolling cap of the 10 most recent events to prevent unbounded storage growth.
 
-### 2. **Slash Command & Event Synchronization**
-* Integrates both native **Discord Application Slash Commands** (`/activity_start`, `/activity_end`) and legacy prefix handling (`!lista`).
-* Strict Role-Based Access Control (RBAC) ensuring administrative-only execution for privileged management routines.
+### 2. **Rich Discord Visualizations (Embeds & Party Grouping)**
+* **Organized Voice Party Breakdown (`/lista`):** Automatically groups participants by voice channels (e.g., `Party 1`, `Party 2`, `ShotCaller`), displaying individual durations and active percentages in a clean Discord Embed.
+* **Global Activity Ranking (`/ranking`):** Aggregates total time spent across the last 10 stored events, generating a podium-style leaderboard (`👑`, `🥈`, `🥉`) of the most active guild members.
 
 ### 3. **Low-Footprint Hardware Optimization**
 * Engineered specifically for energy-efficient, 24/7 operation on compact x86 hardware (Lenovo ThinkCentre Tiny / Proxmox VE), keeping idle power draw minimal (~6–12W) while maintaining sub-second response times.
 
 ---
 
-## 🗺️ Roadmap & Future Vision (Guild Management Suite)
-
-The project is actively evolving from a standalone attendance tracker into a comprehensive, lightweight **Guild Management & Roster Platform**:
-
-* [ ] **SQLite (WAL Mode) Database Migration:** Transitioning from flat JSON storage to a concurrent SQLite database with Write-Ahead Logging enabled, allowing simultaneous read/write operations between the Discord bot and the web backend.
-* [ ] **Guild Roster & Static Party Web Dashboard (`FastAPI` + `Tailwind CSS`):**
-  * Public/authenticated web portal displaying active guild members, character classes, specializations, and assigned raid groups (*Static Parties*).
-  * Live integration with Discord attendance metrics—displaying each player's historical event participation percentage directly alongside their character card.
-* [ ] **In-Discord Character & Absence Management:**
-  * Slash commands (`/character add`, `/static assign`) allowing players to register and update their in-game characters directly via Discord.
-  * Automated AFK/Leave of Absence tracking (`/absence`) that updates roster availability on the web dashboard and prevents unfair attendance penalties.
-* [ ] **Discord OAuth2 & Cloudflare Zero Trust Access:** Seamless authentication for guild officers and members viewing protected roster analytics.
-* [ ] **Lightweight Audio / Soundboard Integration:** Low-CPU guild soundboard or stream player utilizing external audio offloading (Lavalink) to preserve host energy efficiency.
-
----
-
 ## 🛠️ Stack & Technologies Used
 
 * **Language & Core Framework:** Python 3.11, `discord.py 2.x`, `asyncio`
-* **Web Backend (Planned/In-Progress):** `FastAPI`, `Uvicorn`, `Jinja2`, `aiosqlite`
-* **Configuration Management:** `python-dotenv`
+* **Data Storage:** Local JSON persistence (`events_history.json` with rolling 10-event limit)
 * **Virtualization & OS:** Proxmox VE, Debian GNU/Linux 12 (Bookworm)
-* **Networking & Security:** Cloudflare WARP (`warp-cli`), Cloudflare Tunnel (`cloudflared`), Proxmox VE Firewall, Linux `UFW`
-* **Process Management:** `screen` / `systemd` daemonized services
-
----
-
-## 🔄 Architecture Evolution: From Static Snapshots to Real-Time Tracking
-
-Initially, the tracking architecture captured a **single static snapshot** at the exact moment `/activity_start` was issued. This approach had a structural limitation: users joining mid-event or leaving before `/activity_end` were either missed or falsely represented.
-
-### The Refactored Real-Time Pipeline
-To ensure true event analytics, the system was refactored to an **event-driven state-machine**:
-
-1. **State Initialization (`/activity_start`):** Captures current timestamps and maps all active channel members to dynamic in-memory session timers (`active_sessions`).
-2. **Asynchronous Telemetry (`on_voice_state_update`):** 
-   * On channel join/leave/move events, the bot calculates elapsed session time and accumulates total voice seconds per user (`user_seconds`).
-3. **Analytics & Aggregation (`/activity_end`):**
-   * Finalizes active timers, computes total event duration $\Delta t$, and evaluates relative attendance percentage per participant:
-     $$\text{Attendance (\%)} = \min\left(100, \left(\frac{\text{User Voice Seconds}}{\Delta t}\right) \times 100\right)$$
-   * Sorts participants by active engagement level and writes the top historical metrics to structured persistence.
+* **Networking & Security:** Cloudflare WARP (`warp-cli`), Proxmox VE Firewall, Linux `UFW`
+* **Process Management:** Systemd daemonized services (`systemctl`)
 
 ---
 
@@ -112,8 +76,9 @@ To ensure true event analytics, the system was refactored to an **event-driven s
 | Command | Type | Permissions | Description |
 | :--- | :--- | :--- | :--- |
 | `/activity_start [name]` | Slash (`/`) | **Administrator** | Initializes background session tracking. Immediately captures existing voice members and begins logging duration for all users until the session ends. |
-| `/activity_end` | Slash (`/`) | **Administrator** | Concludes the active event session, computes relative attendance percentages for each user, commits results to storage, and clears active memory. |
-| `!lista` | Text (`!`) | Everyone | Renders a formatted breakdown of the 3 most recent events, including total event duration (in minutes) and individual attendance percentages. |
+| `/activity_end` | Slash (`/`) | **Administrator** | Concludes the active event session, computes relative attendance percentages, commits results to local history storage, and clears active memory. |
+| `/lista` | Slash (`/`) | Everyone | Renders a clean Discord Embed showing the latest event breakdown, grouped by voice channels (Party 1, Party 2, etc.) with individual times and percentages. |
+| `/ranking` | Slash (`/`) | Everyone | Generates a global leaderboard summarizing total active time across the last 10 stored events. |
 
 ---
 
@@ -121,7 +86,7 @@ To ensure true event analytics, the system was refactored to an **event-driven s
 
 ### Prerequisites
 * Debian 12 OS inside Proxmox VE with Hypervisor Firewall enabled.
-* Active Cloudflare WARP connection (`warp-cli connect`) & `cloudflared` daemon installed.
+* Active Cloudflare WARP connection (`warp-cli connect`).
 
 ### 1. Directory Structure Setup
 ```bash
@@ -151,20 +116,36 @@ sudo ufw allow from <ADMIN_WORKSTATION_IP> to any port 22 proto tcp
 sudo ufw enable
 ```
 
-### 5. Running as a Daemon Service (Background Persistence)
-To launch the service in a persistent virtual terminal session:
-```bash
-screen -S discord-bot
-source venv/bin/activate
-python3 -u main.py
+### 5. Running as a Systemd Background Service (24/7 Operation)
+Create a systemd service file at `/etc/systemd/system/discord-bot.service`:
+```ini
+[Unit]
+Description=Discord Attendance Bot
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/opt/discord-bot
+ExecStart=/opt/discord-bot/venv/bin/python3 /opt/discord-bot/main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
 ```
-*Detach from session:* Press `Ctrl + A`, followed by `D`.
+
+Enable and start the service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable discord-bot
+sudo systemctl start discord-bot
+```
 
 ---
 
 ## 🔐 Security Considerations
 
 1. **Multi-Layer Network Isolation:** Combines Proxmox VE hypervisor-level egress filtering (blocking access to the local `192.168.0.0/24` subnet) with Debian's host-based `UFW` firewall.
-2. **Zero Open Ports:** No port forwarding or DNAT rules exist on the perimeter router. Outbound traffic traverses Cloudflare WARP, while inbound web traffic will be brokered strictly via Cloudflare Tunnel (`cloudflared`).
-3. **Token & Credential Protection:** `.env` files, database files, and Cloudflare tunnel credentials (`.json`/`.pem`) are strictly excluded from version control via `.gitignore`.
-4. **Data Integrity:** Graceful handling of corrupted/missing storage files prevents daemon crashes during unexpected machine shutdowns.
+2. **Zero Open Ports & Zero Cost:** No external domains, paid hosting, or public tunnels (`cloudflared`) are used. All features operate 100% for free 24/7 with outbound traffic secured via Cloudflare WARP.
+3. **Token & Credential Protection:** `.env` files and session history are strictly excluded from version control via `.gitignore`.
+4. **Data Integrity:** Graceful handling of storage files prevents daemon crashes during unexpected machine shutdowns.
