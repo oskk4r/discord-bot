@@ -2,13 +2,13 @@
 
 A 100% free, self-hosted Discord Automation Service engineered for real-time voice channel attendance tracking, voice engagement analytics, automated event archiving, guild roster management, and hardened Zero-Trust system operations.
 
-Built with **Python 3.11** (`discord.py`) and deployed inside a strictly isolated **Debian Linux Virtual Machine** managed by **Proxmox VE**, utilizing a **Cloudflare WARP** architecture for encrypted outbound connectivity and full local network isolation. All insights, stats, and rankings are handled natively inside Discord via modern Slash Commands and Rich Embeds.
+Built with **Python 3.11** (`discord.py`) and deployed inside a strictly isolated **Debian Linux Virtual Machine** managed by **Proxmox VE**, utilizing secure routing and full local network isolation. All insights, stats, and rankings are handled natively inside Discord via modern Slash Commands and Rich Embeds.
 
 ---
 
 ## 📐 Infrastructure & Zero-Trust Network Architecture
 
-To guarantee complete protection of the host's local home network (LAN/Wi-Fi) without relying on dedicated external hardware firewalls or router port forwarding, the infrastructure utilizes software firewalls combined with secure Cloudflare WARP routing:
+To guarantee complete protection of the host's local home network (LAN/Wi-Fi) without relying on dedicated external hardware firewalls or router port forwarding, the infrastructure utilizes software security and gateway management:
 
 ```
  ┌───────────────────────────────────────────────────────────────────────────┐
@@ -20,8 +20,8 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
  │  │               (UFW Host Firewall: Strict Allowlist)                 │  │
  │  │                                                                     │  │
  │  │  ┌──────────────────────┐       ┌────────────────────────────────┐  │  │
- │  │  │ Discord Bot Service  │ ────► │ Cloudflare WARP Client Tunnel  │  │  │
- │  │  │ (Async discord.py)   │       │ (Encrypted Outbound WireGuard) │  │  │
+ │  │  │ Discord Bot Service  │ ────► │ Gateway Routing & DNS (Router) │  │  │
+ │  │  │ (Async discord.py)   │       │ (Secure Encrypted Outbound)    │  │  │
  │  │  └──────────┬───────────┘       └────────────────────────────────┘  │  │
  │  │             │                                                       │  │
  │  │             ▼ (Local JSON Persistence)                              │  │
@@ -30,7 +30,7 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
  │  │  └──────────────────────┘                                           │  │
  │  └─────────────────────────────────────────────────────────────────────┘  │
  └───────────────────────────────────────────────────────────────────────────┘
-                                                      │ Encrypted Gateway
+                                                      │ Secure Gateway
                                                       ▼
                                         ┌───────────────────────────┐
                                         │        Discord API        │
@@ -39,8 +39,8 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
 ```
 
 ### Isolation Model
-* **Outbound Traffic (`Cloudflare WARP`):** All outgoing gateway traffic from the `discord.py` daemon is routed through an encrypted WireGuard tunnel (`CloudflareWARP`), masking the home IP and ensuring resilient connectivity.
-* **Hypervisor-Level LAN Isolation (`Proxmox Firewall`):** Egress traffic from the VM interface is explicitly filtered at the hypervisor bridge level (`vmbr0`). Outbound packets targeting the local private subnet (`192.168.0.0/24`) are dropped (`DROP`), permitting only default gateway routing (`192.168.0.1`) for WAN/DNS resolution.
+* **Outbound Traffic & Routing:** All outgoing gateway traffic from the `discord.py` daemon is routed securely through the local gateway (`192.168.0.1`), ensuring resilient connectivity.
+* **Hypervisor-Level LAN Isolation (`Proxmox Firewall`):** Egress traffic from the VM interface is explicitly filtered at the hypervisor bridge level (`vmbr0`). Outbound packets targeting the local private subnet (`192.168.0.0/24`) are dropped (`DROP`), permitting only default gateway routing for WAN/DNS resolution.
 * **Guest OS Hardening (`UFW`):** Default `DENY` policy on all incoming interfaces, with a strict IP-restricted allowlist permitting SSH administration (`22/tcp`) exclusively from the primary workstation.
 
 ---
@@ -48,13 +48,13 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
 ## 🌟 Key Technical Features
 
 ### 1. **Real-Time Voice State Tracking & Attendance Analytics**
-* **Event-Driven Listener (`on_voice_state_update`):** Dynamically tracks user connection events, disconnects, and channel shifts in real-time between `/activity_start` and `/activity_end`.
-* **Duration & Percentage Computation:** Calculates exact time spent by each participant on voice channels relative to total event duration, yielding precise attendance percentages (0–100%).
-* **Historical Persistence & Auto-Rotation:** Saves structured event metrics to local persistent storage (`events_history.json`), maintaining a rolling cap of the 10 most recent events to prevent unbounded storage growth.
+* **Event-Driven Listener (`on_voice_state_update`):** Dynamically tracks user connection events, disconnects, and channel shifts in real-time between `/activity start` and `/activity end`.
+* **Duration & Percentage Computation:** Calculates exact time spent by each participant on voice channels relative to total event duration, yielding precise attendance percentages (0–100%) while automatically filtering out bot accounts and non-human users (such as `Speaker` profiles).
+* **Historical Persistence & Auto-Rotation:** Saves structured event metrics to local persistent storage (`events_history.json`), maintaining a rolling cap of the 10 most recent events to prevent unbounded storage growth. When an 11th event is recorded, the oldest is automatically purged.
 
 ### 2. **Rich Discord Visualizations (Embeds & Party Grouping)**
-* **Organized Voice Party Breakdown (`/lista`):** Automatically groups participants by voice channels (e.g., `Party 1`, `Party 2`, `ShotCaller`), displaying individual durations and active percentages in a clean Discord Embed.
-* **Global Activity Ranking (`/ranking`):** Aggregates total time spent across the last 10 stored events, generating a podium-style leaderboard (`👑`, `🥈`, `🥉`) of the most active guild members.
+* **Organized Voice Party Breakdown (`/lista`):** Automatically groups participants by voice channels (e.g., `Party 1`, `Party 2`, `ShotCaller`), displaying the 3 most recent events with individual durations and active percentages in a clean Discord Embed.
+* **Global Activity Ranking (`/ranking`):** Aggregates participation count and total time spent across a selectable number of recent stored events, generating a podium-style leaderboard (`🏆`) sorted first by frequency of attendance and second by total accumulated active time (Top 5).
 
 ### 3. **Low-Footprint Hardware Optimization**
 * Engineered specifically for energy-efficient, 24/7 operation on compact x86 hardware (Lenovo ThinkCentre Tiny / Proxmox VE), keeping idle power draw minimal (~6–12W) while maintaining sub-second response times.
@@ -64,9 +64,9 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
 ## 🛠️ Stack & Technologies Used
 
 * **Language & Core Framework:** Python 3.11, `discord.py 2.x`, `asyncio`
-* **Data Storage:** Local JSON persistence (`events_history.json` with rolling 10-event limit)
+* **Data Storage:** Local JSON persistence (`events_history.json` with rolling 10-event cap)
 * **Virtualization & OS:** Proxmox VE, Debian GNU/Linux 12 (Bookworm)
-* **Networking & Security:** Cloudflare WARP (`warp-cli`), Proxmox VE Firewall, Linux `UFW`
+* **Networking & Security:** Proxmox VE Firewall, Linux `UFW`, Gateway DNS Routing
 * **Process Management:** Systemd daemonized services (`systemctl`)
 
 ---
@@ -75,10 +75,10 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
 
 | Command | Type | Permissions | Description |
 | :--- | :--- | :--- | :--- |
-| `/activity_start [name]` | Slash (`/`) | **Administrator** | Initializes background session tracking. Immediately captures existing voice members and begins logging duration for all users until the session ends. |
-| `/activity_end` | Slash (`/`) | **Administrator** | Concludes the active event session, computes relative attendance percentages, commits results to local history storage, and clears active memory. |
-| `/lista` | Slash (`/`) | Everyone | Renders a clean Discord Embed showing the latest event breakdown, grouped by voice channels (Party 1, Party 2, etc.) with individual times and percentages. |
-| `/ranking` | Slash (`/`) | Everyone | Generates a global leaderboard summarizing total active time across the last 10 stored events. |
+| `/activity start [name]` | Slash (`/`) | **Administrator** | Initializes background session tracking with a custom event name. Immediately captures existing voice members across all channels and begins logging duration for valid users until the session ends. |
+| `/activity end` | Slash (`/`) | **Administrator** | Concludes the active event session, computes relative attendance percentages, commits results to local history storage (rolling 10-event cap), and clears active memory. |
+| `/lista` | Slash (`/`) | Everyone | Renders a clean Discord Embed showing the breakdown of the last 3 events, grouped by voice channels with individual times, minutes, and percentages. |
+| `/ranking [events_count]` | Slash (`/`) | Everyone | Generates a Top 5 leaderboard sorted primarily by event participation frequency and secondarily by total active time across the specified number of recent events. |
 
 ---
 
@@ -86,7 +86,7 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
 
 ### Prerequisites
 * Debian 12 OS inside Proxmox VE with Hypervisor Firewall enabled.
-* Active Cloudflare WARP connection (`warp-cli connect`).
+* Configured network gateway resolution pointing to `192.168.0.1`.
 
 ### 1. Directory Structure Setup
 ```bash
@@ -145,7 +145,7 @@ sudo systemctl start discord-bot
 
 ## 🔐 Security Considerations
 
-1. **Multi-Layer Network Isolation:** Combines Proxmox VE hypervisor-level egress filtering (blocking access to the local `192.168.0.0/24` subnet) with Debian's host-based `UFW` firewall.
-2. **Zero Open Ports & Zero Cost:** No external domains, paid hosting, or public tunnels (`cloudflared`) are used. All features operate 100% for free 24/7 with outbound traffic secured via Cloudflare WARP.
+1. **Multi-Layer Network Isolation:** Combines Proxmox VE hypervisor-level egress filtering (blocking access to unauthorized subnets) with Debian's host-based `UFW` firewall.
+2. **Zero Open Ports & Zero Cost:** No external domains, paid hosting, or public tunnels are required. All features operate 100% for free 24/7 with secure gateway routing.
 3. **Token & Credential Protection:** `.env` files and session history are strictly excluded from version control via `.gitignore`.
 4. **Data Integrity:** Graceful handling of storage files prevents daemon crashes during unexpected machine shutdowns.
