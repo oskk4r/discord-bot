@@ -1,8 +1,10 @@
 # 🤖 Event & Voice Attendance Tracking Discord Bot (`ActivityBot`)
 
-A 100% free, self-hosted Discord Automation Service engineered for real-time voice channel attendance tracking, voice engagement analytics, automated event archiving, scheduled event notifications, personal activity profiles, and hardened Zero-Trust system operations.
+A 100% free, self-hosted Discord Automation Service engineered for real-time voice channel attendance tracking, automated event lifecycle management, native Discord Scheduled Events integration, full-server attendance auditing, personal activity profiles, and hardened Zero-Trust system operations.
 
-Built with **Python 3.11** (`discord.py`) and deployed inside a strictly isolated **Debian Linux Virtual Machine** managed by **Proxmox VE**, utilizing a **Cloudflare WARP** architecture for encrypted outbound connectivity and full local network isolation. All insights, stats, and rankings are handled natively inside Discord via modern Slash Commands and Rich Embeds.
+Built with **Python 3.11** (`discord.py`) and deployed inside a strictly isolated **Debian 12 Linux Virtual Machine** managed by **Proxmox VE**, utilizing a **Cloudflare WARP** architecture for encrypted outbound connectivity and full local network isolation. All insights, recaps, and leaderboards are handled natively inside Discord via modern Slash Commands and Rich Embeds.
+
+---
 
 ## 📐 Infrastructure & Zero-Trust Network Architecture
 
@@ -31,82 +33,77 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
                                                       │ Encrypted Gateway
                                                       ▼
                                         ┌───────────────────────────┐
-                                        │        Discord API        │
+ │        Discord API        │
                                         │  (Zero Open Router Ports) │
                                         └───────────────────────────┘
 ```
 
 ### Isolation Model
 
-* **Outbound Traffic (`Cloudflare WARP`):** All outgoing gateway traffic from the `discord.py` daemon is routed through an active encrypted WireGuard tunnel (`warp-svc`), masking the home IP, providing `warp=on` security, and ensuring resilient connectivity.
-
+* **Outbound Traffic (`Cloudflare WARP`):** All outgoing gateway traffic from the `discord.py` daemon is routed through an active encrypted WireGuard tunnel (`warp-svc`, `warp=on`), masking the home IP and ensuring resilient, encrypted connectivity.
 * **Hypervisor-Level LAN Isolation (`Proxmox Firewall`):** Egress traffic from the VM interface is explicitly filtered at the hypervisor bridge level (`vmbr0`). Outbound packets targeting the local private subnet (`192.168.0.0/24`) are dropped (`DROP`), permitting only default gateway routing for WAN/DNS resolution.
+
+---
 
 ## 🌟 Key Technical Features
 
-### 1. **Real-Time Voice State Tracking & Attendance Analytics**
+### 1. **Full Event Lifecycle Automation & Native Discord Events**
+* **Automated Start & Optional Auto-End (`/activity schedule`):** Administrators can schedule events with a `start_time` and an optional `end_time`. The bot automatically starts tracking at the exact start minute and—if `end_time` is configured—automatically concludes the session, saves metrics, and posts a summary without manual intervention.
+* **Native Discord Scheduled Events Integration:** Scheduling an event automatically creates a native server event in Discord's **Events** tab and synchronizes its lifecycle (`Scheduled` ➡️ `Active` ➡️ `Completed`).
+* **15-Minute Multi-Channel Alerts:** Exactly 15 minutes before an event starts, the bot broadcasts an `@everyone` embed in the announcement channel (`#hello`) and sends Direct Message (DM) reminders to guild members.
 
-* **Event-Driven Listener (`on_voice_state_update`):** Dynamically tracks user connection events, disconnects, and channel shifts in real-time between `/activity start` and `/activity end`.
+### 2. **Real-Time Voice State Tracking & Fair Percentage Analytics**
+* **Event-Driven Listener (`on_voice_state_update`):** Dynamically tracks user joins, disconnects, and channel switches in real-time across all voice channels.
+* **True Event-Duration Percentages:** Computes each participant's attendance percentage relative to the **total duration of the event** (`0%–100%`), rather than channel headcount, ensuring fair and accurate participation metrics.
+* **Smart User Filtering:** Automatically excludes Discord bots and non-human utility accounts (such as `Speaker` profiles).
+* **Rolling 10-Event Persistence:** Stores structured event metrics (`start_time`, `end_time`, channel breakdowns) in `events_history.json`, maintaining a rolling window of the 10 most recent events.
 
-* **Duration & Percentage Computation:** Calculates exact time spent by each participant on voice channels relative to total event duration, yielding precise attendance percentages (0–100%) while automatically filtering out bot accounts and non-human users (such as `Speaker` profiles).
+### 3. **Automated Post-Event Channel Recaps**
+* **Instant Summary Broadcasts:** Whenever an event concludes (either manually via `/activity end` or automatically at `end_time`), the bot posts a clean, formatted summary embed in `#hello` listing all voice channels and their participants.
 
-* **Historical Persistence & Auto-Rotation:** Saves structured event metrics to local persistent storage (`events_history.json`), maintaining a rolling cap of the 10 most recent events. When an 11th event is recorded, the oldest is automatically purged.
-
-### 2. **Event Scheduling & Automated 15-Minute Reminders**
-
-* **Background Task (`check_schedule_loop`):** Continuously monitors scheduled events every minute.
-
-* **Automated Broadcasts:** Exactly 15 minutes prior to a scheduled event (`/activity schedule`), the bot automatically dispatches an alert embed to the server's primary text/system channel to rally participants.
-
-### 3. **Personal Activity Profiles (`/myactivity`)**
-
-* **User-Specific Transparency:** Allows every member on the server to check their individual participation history, total attended events count, and cumulative voice time without needing administrative privileges.
-
-### 4. **Rich Discord Visualizations & Rankings**
-
-* **Voice Party Breakdown (`/lista`):** Automatically groups participants by voice channels, displaying the 3 most recent events with individual durations and active percentages in a clean Discord Embed.
-
-* **Global Activity Ranking (`/ranking`):** Aggregates participation count and total time spent across a selectable number of recent stored events, generating a podium-style leaderboard (`🏆`) sorted first by frequency of attendance and second by total accumulated active time (Top 5).
+### 4. **Server-Wide Attendance Audits & Leaderboards**
+* **Full Server Attendance (`/frekwencja`):** Audits **every eligible member** on the Discord server (including members with `0` events attended) across the last 10 recorded events, sorted by attendance frequency and cumulative voice minutes, with automatic embed pagination for large rosters.
+* **Last 3 Events Breakdown (`/lista`):** Displays a detailed channel-by-channel breakdown of the 3 most recent events with exact start/end timestamps, minutes spent, and event-duration attendance percentages.
+* **Top 5 Leaderboard (`/ranking`):** Aggregates attendance frequency and total active voice time across a customizable number of recent events (up to 10) to generate a Top 5 podium leaderboard (`🏆`).
+* **Personal Activity Profile (`/myactivity`):** Allows any server member to privately inspect their own participation history, total attended events, and cumulative voice minutes.
 
 ### 5. **Administrative JSON Backup & Export (`/export`)**
+* **Data Portability:** Enables administrators to export the complete historical database (`events_history.json`) directly as a downloadable JSON attachment within Discord.
 
-* **Data Portability:** Allows administrators to export the full historical database directly as a downloadable JSON file within Discord.
-
-### 6. **Low-Footprint Hardware Optimization**
-
-* Engineered specifically for energy-efficient, 24/7 operation on compact x86 hardware (Lenovo ThinkCentre Tiny / Proxmox VE), keeping idle power draw minimal (\~6–12W) while maintaining sub-second response times.
+---
 
 ## 🛠️ Stack & Technologies Used
 
 * **Language & Core Framework:** Python 3.11, `discord.py 2.x`, `asyncio`
-
 * **Data Storage:** Local JSON persistence (`events_history.json`, `scheduled_events.json`)
-
 * **Virtualization & OS:** Proxmox VE, Debian GNU/Linux 12 (Bookworm)
-
 * **Networking & Security:** Cloudflare WARP (`warp-cli`), Proxmox VE Firewall, Local Gateway DNS Routing
-
 * **Process Management:** Systemd daemonized services (`systemctl`)
+
+---
 
 ## 📊 Command Reference
 
-| Command | Type | Permissions | Description | 
-| ----- | ----- | ----- | ----- | 
-| `/activity start [name]` | Slash (`/`) | **Administrator** | Initializes background session tracking with a custom event name. Immediately captures existing voice members across all channels and begins logging duration for valid users. | 
-| `/activity end` | Slash (`/`) | **Administrator** | Concludes the active event session, computes relative attendance percentages, commits results to local history storage (rolling 10-event cap), and clears active memory. | 
-| `/activity schedule [name] [date_time]` | Slash (`/`) | **Administrator** | Schedules a future event (`YYYY-MM-DD HH:MM`) and triggers an automatic reminder broadcast 15 minutes before start time. | 
-| `/export` | Slash (`/`) | **Administrator** | Exports the complete event history as a downloadable JSON file for backups. | 
-| `/myactivity` | Slash (`/`) | Everyone | Displays personal participation stats, total attended events, and cumulative active voice duration. | 
-| `/lista` | Slash (`/`) | Everyone | Renders a clean Discord Embed showing the breakdown of the last 3 events, grouped by voice channels with individual times and percentages. | 
-| `/ranking [events_count]` | Slash (`/`) | Everyone | Generates a Top 5 leaderboard sorted primarily by event participation frequency and secondarily by total active time. | 
+| Command | Type | Permissions | Description |
+| :--- | :--- | :--- | :--- |
+| `/activity start [name]` | Slash (`/`) | **Administrator** | Manually starts background voice tracking with a custom event name, immediately logging all users currently in voice channels. |
+| `/activity end` | Slash (`/`) | **Administrator** | Concludes the active event, computes final durations and percentages, saves to `events_history.json`, closes the native Discord event, and posts a participant recap in `#hello`. |
+| `/activity schedule [name] [start_time] [end_time]` | Slash (`/`) | **Administrator** | Schedules a future event (`YYYY-MM-DD HH:MM`), creates a native Discord event, triggers 15-minute `@everyone` & DM reminders, auto-starts tracking, and optionally auto-ends at `end_time`. |
+| `/export` | Slash (`/`) | **Administrator** | Exports the full event history as a downloadable JSON file for backups or external analysis. |
+| `/frekwencja` | Slash (`/`) | Everyone | Lists **all server members** and displays how many of the last 10 events each person attended alongside their total active minutes. |
+| `/lista` | Slash (`/`) | Everyone | Renders a summary of the last 3 events, grouped by voice channels with time ranges, individual durations, and event-duration percentages. |
+| `/ranking [events_count]` | Slash (`/`) | Everyone | Generates a Top 5 leaderboard across the selected number of recent events (max 10), sorted by attendance count and total active time. |
+| `/myactivity` | Slash (`/`) | Everyone | Displays your personal participation profile, total attended events, cumulative voice time, and recent event log. |
+
+---
 
 ## 🚀 Deployment & Local Environment Setup
 
 ### Prerequisites
 
 * Debian 12 OS inside Proxmox VE with Hypervisor Firewall enabled.
-
 * Installed and connected Cloudflare WARP (`warp-cli connect`).
+* **Server Members Intent** enabled in the Discord Developer Portal (required for `/frekwencja` and DM reminders).
 
 ### 1. Directory Structure Setup
 
@@ -124,15 +121,7 @@ pip install --upgrade pip
 pip install discord.py python-dotenv
 ```
 
-### 3. Environment Configuration (`.env`)
-
-Create a `.env` file in `/opt/discord-bot`:
-
-```env
-DISCORD_TOKEN=your_bot_token_here
-```
-
-### 4. Running as a Systemd Background Service (24/7 Operation)
+### 3. Running as a Systemd Background Service (24/7 Operation)
 
 Create a systemd service file at `/etc/systemd/system/discord-bot.service`:
 
@@ -152,20 +141,19 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-Enable and start the service:
+Enable, start, or restart the service:
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable discord-bot
-sudo systemctl start discord-bot
+sudo systemctl restart discord-bot
 ```
 
-## 🔐 Security Considerations
+---
 
-1. **Encrypted Tunneling (`Cloudflare WARP`):** All traffic is routed securely through WireGuard (`warp=on`), ensuring total privacy and bypassing local ISP restrictions.
+## 🔐 Security & Resource Efficiency
 
-2. **Multi-Layer Network Isolation:** Combines Proxmox VE hypervisor-level egress filtering (blocking access to unauthorized subnets) with local gateway controls.
-
-3. **Zero Open Ports & Zero Cost:** No external domains, paid hosting, or public tunnels are required. All features operate 100% for free 24/7.
-
-4. **Token & Credential Protection:** `.env` files and session histories are strictly excluded from version control via `.gitignore`.
+1. **Encrypted Tunneling (`Cloudflare WARP`):** All traffic is routed securely through WireGuard (`warp=on`), ensuring total privacy and masking the host's public IP address.
+2. **Multi-Layer Network Isolation:** Combines Proxmox VE hypervisor-level egress filtering (dropping access to local subnets) with local gateway controls.
+3. **Zero Open Ports & Zero Cost:** No external domains, paid hosting, or public inbound ports are required.
+4. **Ultra-Low Resource Footprint:** Consumes `<0.1%` average CPU and `~40 MB` RAM, maintaining negligible power draw (`~6–12W` idle on compact x86 hardware) during 24/7 operation.
