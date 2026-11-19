@@ -1,22 +1,37 @@
 # 🤖 Event & Voice Attendance Tracking Discord Bot (`ActivityBot`)
 
-A 100% free, self-hosted Discord Automation Service engineered for tactical guild event logistics, real-time voice channel attendance tracking, schedule management, AFK/Deafened detection, automated monthly Excel (`.xlsx`) reporting, visual attendance charts, and hardened Zero-Trust system operations.
+A 100% free, self-hosted Discord Automation Service engineered for tactical guild event logistics, real-time voice channel attendance tracking, schedule management, AFK/Deafened detection, automated monthly Excel (`.xlsx`) reporting, visual attendance charts, and hardened network segmentation.
 
-Built with **Python 3.11** (`discord.py`, `matplotlib` & `openpyxl`) and deployed inside a strictly isolated **Debian 12 Linux Virtual Machine** managed by **Proxmox VE**, utilizing a **Cloudflare WARP** architecture for encrypted outbound connectivity and full local network isolation.
+Built with **Python 3.11** (`discord.py`, `matplotlib` & `openpyxl`) and deployed inside an isolated **Debian 12 Linux Virtual Machine** (`discord-bot-vm`, ID `100`) on **Proxmox VE** (`serwer`), segmented behind a **MikroTik hEX** router on a dedicated `10.10.10.0/24` subnet with **Cloudflare WARP** encrypted outbound connectivity.
 
 ---
 
-## 📐 Infrastructure & Zero-Trust Network Architecture
+## 📐 Infrastructure & Network Segmentation Architecture
 
-To guarantee complete protection of the host's local home network (LAN/Wi-Fi) without relying on dedicated external hardware firewalls or router port forwarding, the infrastructure utilizes Proxmox firewall rules combined with a secure Cloudflare WARP encrypted WireGuard tunnel:
+To protect the host's local home network (`192.168.0.0/16`) from the VM and Proxmox hypervisor while maintaining controlled management access from the main workstation (`192.168.0.201`), the environment uses a **MikroTik hEX** router (`192.168.0.38` on `ether1` WAN; `10.10.10.1/24` on `bridgeLocal` / `ether2` LAN) paired with a **Cloudflare WARP** tunnel on the VM:
 
 ```
  ┌───────────────────────────────────────────────────────────────────────────┐
- │                         PROXMOX VE HYPERVISOR                             │
- │                  (L2/L3 VM Firewall: LAN Subnet Dropped)                  │
+ │                         HOME LAN (192.168.0.0/16)                         │
+ │   Main PC (192.168.0.201) ────► MikroTik hEX WAN ether1 (192.168.0.38)  │
+ │                                   │  • DST-NAT :8006 -> 10.10.10.200:8006 │
+ │                                   │  • DST-NAT :2222 -> 10.10.10.201:22   │
+ └───────────────────────────────────┼───────────────────────────────────────┘
+                                     │
+                 ┌───────────────────▼───────────────────┐
+                 │      MikroTik hEX (bridgeLocal)       │
+                 │           10.10.10.1/24               │
+                 │  • forward established,related: ACCEPT│
+                 │  • 10.10.10.0/24 -> 192.168.0.0/16:   │
+                 │    DROP ("Isolate Proxmox...")        │
+                 └───────────────────┬───────────────────┘
+                                     │ ether2
+ ┌───────────────────────────────────▼───────────────────────────────────────┐
+ │                    PROXMOX VE HYPERVISOR (10.10.10.200/24)               │
+ │                        Bridge vmbr0 <-> nic0                              │
  │                                                                           │
  │  ┌─────────────────────────────────────────────────────────────────────┐  │
- │  │                   Debian 12 VM (/opt/discord-bot)                   │  │
+ │  │             Debian 12 VM (/opt/discord-bot) — 10.10.10.201/24      │  │
  │  │                                                                     │  │
  │  │  ┌──────────────────────┐       ┌────────────────────────────────┐  │  │
  │  │  │ Discord Bot Service  │ ────► │ Cloudflare WARP Client Tunnel  │  │  │
@@ -30,18 +45,18 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
  │  │  └─────────────────────────────────┘                                │  │
  │  └─────────────────────────────────────────────────────────────────────┘  │
  └───────────────────────────────────────────────────────────────────────────┘
-                                                      │ Encrypted Gateway
-                                                      ▼
-                                        ┌───────────────────────────┐
-                                        │        Discord API        │
-                                        │  (Zero Open Router Ports) │
-                                        └───────────────────────────┘
+                                     │ Encrypted Gateway
+                                     ▼
+                       ┌───────────────────────────┐
+                       │        Discord API        │
+                       └───────────────────────────┘
 ```
 
-### Isolation Model
+### Segmentation & Access Model
 
-* **Outbound Traffic (`Cloudflare WARP`):** All outgoing gateway traffic from the `discord.py` daemon is routed through an active encrypted WireGuard tunnel (`warp-svc`, `warp=on`), masking the home IP and ensuring resilient, encrypted connectivity.
-* **Hypervisor-Level LAN Isolation (`Proxmox Firewall`):** Egress traffic from the VM interface is explicitly filtered at the hypervisor bridge level (`vmbr0`). Outbound packets targeting the local private subnet (`192.168.0.0/24`) are dropped (`DROP`), permitting only default gateway routing for WAN/DNS resolution.
+* **Dedicated Subnet & Router Isolation (`MikroTik hEX`):** Proxmox (`10.10.10.200/24` on `vmbr0` / `nic0`) and `discord-bot-vm` (`10.10.10.201/24` on `ens18`) live in `10.10.10.0/24` behind `bridgeLocal` (`10.10.10.1/24`). MikroTik firewall `forward` rules accept `established,related` return traffic and `DROP` new forwarded traffic from `10.10.10.0/24` to `192.168.0.0/16`.
+* **Controlled Management Access (`DST-NAT`):** Access from `192.168.0.201` via `192.168.0.38` (`ether1`) is handled through explicit `dstnat` rules (e.g., `8006` for Proxmox Web UI and `2222 -> 22` for VM SSH), avoiding exposed public internet ports.
+* **Encrypted Outbound Traffic (`Cloudflare WARP`):** Outbound traffic from the VM can be routed through Cloudflare WARP (`warp-cli` / `warp-svc`) for encrypted transport and IP masking toward external services such as Discord.
 
 ---
 
@@ -87,7 +102,7 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
 * **Language & Core Frameworks:** Python 3.11, `discord.py 2.x`, `matplotlib` (Headless `Agg` backend), `openpyxl`, `asyncio`
 * **Data Storage:** Local JSON persistence (`events_history.json`, `scheduled_events.json`) & In-Memory `.xlsx` Generation
 * **Virtualization & OS:** Proxmox VE, Debian GNU/Linux 12 (Bookworm)
-* **Networking & Security:** Cloudflare WARP (`warp-cli`), Proxmox VE Firewall, Local Gateway DNS Routing
+* **Routing & Networking:** MikroTik hEX (RouterOS), Cloudflare WARP (`warp-cli` / `warp-svc`)
 * **Process Management:** Systemd daemonized services (`systemctl`)
 
 ---
@@ -115,8 +130,8 @@ To guarantee complete protection of the host's local home network (LAN/Wi-Fi) wi
 
 ### Prerequisites
 
-* Debian 12 OS inside Proxmox VE with Hypervisor Firewall enabled.
-* Installed and connected Cloudflare WARP (`warp-cli connect`).
+* Debian 12 VM (`10.10.10.201/24` on `ens18`) inside Proxmox VE (`10.10.10.200/24` on `vmbr0` / `nic0`) connected to a MikroTik hEX router (`10.10.10.1/24` on `bridgeLocal` / `ether2`, `192.168.0.38` on `ether1`).
+* Installed and connected Cloudflare WARP (`warp-cli connect`), where applicable.
 * **Server Members Intent** enabled in the Discord Developer Portal (required for `/frekwencja`, `/brak_frekwencji`, and DM reminders).
 * Dedicated text channels created on the server: `#hello`, `#activity`, `#ranking`, `#my-activity`, and `#admin`.
 
@@ -168,7 +183,7 @@ sudo systemctl restart discord-bot
 
 ## 🔐 Security & Resource Efficiency
 
-1. **Encrypted Tunneling (`Cloudflare WARP`):** All traffic is routed securely through WireGuard (`warp=on`), ensuring total privacy and masking the host's public IP address.
-2. **Multi-Layer Network Isolation:** Combines Proxmox VE hypervisor-level egress filtering (dropping access to local subnets) with local gateway controls.
-3. **Zero Open Ports & Zero Cost:** No external domains, paid hosting, or public inbound ports are required.
-4. **Ultra-Low Resource Footprint:** Even with headless chart generation (`matplotlib`) and in-memory Excel exports (`openpyxl`), the bot consumes `<0.4%` average CPU and minimal RAM on Proxmox VE, maintaining negligible power draw during 24/7 operation.
+1. **Subnet Segmentation & Firewall Rules (`MikroTik hEX`):** Separates `10.10.10.0/24` from `192.168.0.0/16` (`DROP` on forwarded traffic from `10.10.10.0/24` to `192.168.0.0/16` while permitting `established,related` return traffic) and exposes management access via explicit `dstnat` rules.
+2. **Encrypted Tunneling (`Cloudflare WARP`):** Routes outbound traffic through Cloudflare WARP (`warp-svc`) where enabled for encrypted transport and IP masking.
+3. **Zero Public Inbound Ports & Zero Hosting Cost:** Operates on local hardware without paid cloud hosting or public router port forwards.
+4. **Ultra-Low Resource Footprint:** Even with headless chart generation (`matplotlib`) and in-memory Excel exports (`openpyxl`), the bot consumes `<0.4%` average CPU and minimal RAM on Proxmox VE, maintaining low power draw during 24/7 operation.
